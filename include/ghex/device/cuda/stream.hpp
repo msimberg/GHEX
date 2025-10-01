@@ -55,9 +55,11 @@ struct stream
 
     void sync()
     {
-        GHEX_CHECK_CUDA_RESULT(cudaEventRecord(m_event, m_stream))
-        // busy wait here
-        GHEX_CHECK_CUDA_RESULT(cudaEventSynchronize(m_event))
+        // These two are roughly equivalent
+        GHEX_CHECK_CUDA_RESULT(cudaStreamSynchronize(m_stream))
+        // GHEX_CHECK_CUDA_RESULT(cudaEventRecord(m_event, m_stream))
+        // // busy wait here
+        // GHEX_CHECK_CUDA_RESULT(cudaEventSynchronize(m_event))
     }
 };
 } // namespace device
