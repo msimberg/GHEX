@@ -165,7 +165,7 @@ struct packer<gpu>
                         GHEX_CHECK_CUDA_RESULT(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
                         GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
 
-                        fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(s));
+                        fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&s));
 
                         // Use the main stream only to synchronize. Launch
                         // the work on a separate stream and insert an event
