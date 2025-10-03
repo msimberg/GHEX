@@ -74,8 +74,9 @@ await_futures(std::vector<Future>& range, Continuation&& cont)
     auto       end = index_list.end();
     while (begin != end)
     {
-        end =
-            std::remove_if(begin, end, [&range, cont = std::forward<Continuation>(cont)](int idx) {
+        end = std::remove_if(begin, end,
+            [&range, cont = std::forward<Continuation>(cont)](int idx)
+            {
                 if (range[idx].test())
                 {
                     cont(range[idx].get());
@@ -84,6 +85,10 @@ await_futures(std::vector<Future>& range, Continuation&& cont)
                 else
                     return false;
             });
+        // TODO: probe mpi to make progress
+        // int flag;
+        // MPI_Status status;
+        // MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, your_comm, &flag, &status);
     }
 }
 
@@ -147,26 +152,54 @@ struct packer<gpu>
             {
                 if (p1.second.size > 0u)
                 {
+                    device::guard g(p1.second.buffer);
                     for (const auto& fb : p1.second.field_infos)
                     {
-                        device::guard g(p1.second.buffer);
-                        fb.call_back(g.data() + fb.offset, *fb.index_container,
-                            (void*)(&p1.second.m_stream.get()));
+                        // TODO:
+                        // 1. launch pack kernels on separate streams for all data
+                        // 1. (alternative) pack them all into the same kernel
+                        // 2. trigger the send from a cuda host function
+                        // 3. don't wait for futures here, but mixed with polling mpi for receives
+                        for (const auto& is : *fb.index_container)
+                        {
+                            device::stream s{};
+                            // fb.call_back(g.data() + fb.offset, *fb.index_container,
+                            //     (void*)(&p1.second.m_stream.get()));
+                            fb.call_back(g.data() + fb.offset, is,
+                                (void*)(s.get()));
+
+                            // Use the main stream only to synchronize. Launch
+                            // the work on a separate stream and insert an event
+                            // to allow waiting for all work on the main stream.
+                            cudaEvent_t e;
+                            GHEX_CHECK_CUDA_RESULT(
+                                cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+                            GHEX_CHECK_CUDA_RESULT(
+                                cudaStreamCreateWithFlags(&s.get(), cudaStreamNonBlocking));
+                            GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(&s.get(), e));
+                            GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
+                        }
                     }
+                    // GHEX_CHECK_CUDA_RESULT(
+                    // cudaLaunchHostFunc(&p1.second.m_stream.get(), [](void* p) {
+                    //     auto& comm = *static_cast<communicator_type*>(p);
+                    //     comm.send(b->buffer, b->rank, b->tag);
+                    // }, static_cast<void*>(&comm)));
                     stream_futures.push_back(future_type{&(p1.second), p1.second.m_stream});
-                    ++num_streams;
+                    // unused:
+                    // ++num_streams;
                 }
             }
         }
-        await_futures(stream_futures, [&comm, &send_reqs](send_buffer_type* b) {
-            send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag));
-        });
+        await_futures(stream_futures, [&comm, &send_reqs](send_buffer_type* b)
+            { send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag)); });
     }
 
     template<typename Buffer>
     static void unpack(Buffer& buffer, unsigned char* data)
     {
         auto& stream = buffer.m_stream;
+        // TODO: Do same as for pack, i.e. use one stream per field_info
         for (const auto& fb : buffer.field_infos)
             fb.call_back(data + fb.offset, *fb.index_container, (void*)(&stream.get()));
     }
@@ -274,9 +307,8 @@ struct packer<gpu>
                 }
             }
         }
-        await_futures(stream_futures, [&comm, &send_reqs](send_buffer_type* b) {
-            send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag));
-        });
+        await_futures(stream_futures, [&comm, &send_reqs](send_buffer_type* b)
+            { send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag)); });
     }
 };
 #endif

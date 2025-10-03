@@ -230,10 +230,21 @@ class communication_object
       * @tparam Fields list of field types
       * @param buffer_infos buffer_info objects created by binding a field descriptor to a pattern
       * @return handle to await communication */
+    // TODO: Combine exchange and wait into exchange_and_wait, avoid calling
+    // twice from python (these are anyway combined in icon4py).
     template<typename... Archs, typename... Fields>
     [[nodiscard]] handle_type exchange(buffer_info_type<Archs, Fields>... buffer_infos)
     {
         exchange_impl(buffer_infos...);
+        // TODO: Assymetry here.
+        //
+        // post_recvs iterates through memory and fields here in the
+        // communication object, installs callbacks for unpacking per field
+        // (though one loop remains inside unpack).
+        //
+        // pack passes send_reqs and comm to pack, which does the iterating and
+        // installing callback. pack, however, waits for packs to complete to
+        // trigger sends.
         post_recvs();
         pack();
         return {this};
@@ -267,7 +278,7 @@ class communication_object
         Iterator0 first0, Iterator0 last0, Iterator1 first1, Iterator1 last1, Iterators... iters)
     {
         static_assert(
-            sizeof...(Iterators) % 2 == 0, "need even number of iteratiors: (begin,end) pairs");
+            sizeof...(Iterators) % 2 == 0, "need even number of iterators: (begin,end) pairs");
         // call helper function to turn iterators into pairs of iterators
         return exchange_make_pairs(std::make_index_sequence<2 + sizeof...(iters) / 2>(), first0,
             last0, first1, last1, iters...);
@@ -568,6 +579,7 @@ class communication_object
         allocate<Arch, T, typename buffer_memory<Arch>::send_buffer_type>(
             mem->send_memory[device_id], pattern.send_halos(),
             [field_ptr](void* buffer, const index_container_type& c, void* arg) {
+            // TODO
                 field_ptr->pack(reinterpret_cast<T*>(buffer), c, arg);
             },
             dom_id, tag_offset, false, field_ptr);

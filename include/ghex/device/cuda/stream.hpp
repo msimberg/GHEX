@@ -23,13 +23,13 @@ namespace device
 struct stream
 {
     cudaStream_t          m_stream;
-    cudaEvent_t           m_event;
+    // cudaEvent_t           m_event;
     ghex::util::moved_bit m_moved;
 
     stream()
     {
         GHEX_CHECK_CUDA_RESULT(cudaStreamCreateWithFlags(&m_stream, cudaStreamNonBlocking))
-        GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&m_event, cudaEventDisableTiming))
+        // GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&m_event, cudaEventDisableTiming))
     }
 
     stream(const stream&) = delete;
@@ -42,7 +42,7 @@ struct stream
         if (!m_moved)
         {
             GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaStreamDestroy(m_stream))
-            GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaEventDestroy(m_event))
+            // GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaEventDestroy(m_event))
         }
     }
 

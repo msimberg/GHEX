@@ -432,6 +432,7 @@ class atlas_data_descriptor<ghex::gpu, DomainId, T, StorageTraits, FunctionSpace
 
     int num_components() const noexcept { return m_components; }
 
+    // TODO
     template<typename IndexContainer>
     void pack(value_type* buffer, const IndexContainer& c, void* stream_ptr)
     {

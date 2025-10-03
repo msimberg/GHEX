@@ -546,6 +546,7 @@ class data_descriptor<gpu, DomainId, Idx, T>
         return m_values + (local_v * m_index_stride + level * m_level_stride);
     }
 
+    // TODO
     template<typename IndexContainer>
     void pack(value_type* buffer, const IndexContainer& c, void* stream_ptr)
     {
