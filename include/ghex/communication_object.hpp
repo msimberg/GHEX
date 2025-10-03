@@ -236,6 +236,7 @@ class communication_object
         exchange_impl(buffer_infos...);
         post_recvs();
         pack();
+        wait();
         return {this};
     }
 
@@ -281,6 +282,7 @@ class communication_object
         exchange_impl(iter_pairs...);
         post_recvs();
         pack();
+        wait();
         return {this};
     }
 
