@@ -24,6 +24,34 @@
 
 namespace ghex
 {
+namespace detail {
+struct cuda_event {
+    cudaEvent_t m_event;
+    ghex::util::moved_bit m_moved;
+
+    cuda_event() {
+        GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&m_event, cudaEventDisableTiming))
+    }
+    cuda_event(const cuda_event&) = delete;
+    cuda_event& operator=(const cuda_event&) = delete;
+    cuda_event(cuda_event&& other) = default;
+    cuda_event& operator=(cuda_event&&) = default;
+
+    ~cuda_event()
+    {
+        if (!m_moved)
+        {
+            GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaEventDestroy(m_event))
+        }
+    }
+
+    operator bool() const noexcept { return m_moved; }
+    operator cudaEvent_t() const noexcept { return m_event; }
+    cudaEvent_t&       get() noexcept { return m_event; }
+    const cudaEvent_t& get() const noexcept { return m_event; }
+};
+}
+
 /** @brief generic implementation of pack and unpack */
 template<typename Arch>
 struct packer
@@ -128,6 +156,10 @@ struct packer<gpu>
         static std::vector<device::stream> streams(num_extra_streams);
         static std::size_t stream_index{0};
 
+        constexpr std::size_t num_events{128};
+        static std::vector<detail::cuda_event> events(num_events);
+        static std::size_t event_index{0};
+
         using send_buffer_type = typename Map::send_buffer_type;
         using future_type = device::future<send_buffer_type*>;
         std::size_t num_streams = 0;
@@ -171,8 +203,8 @@ struct packer<gpu>
                                 cudaStream_t& s = streams[stream_index].get();
                                 stream_index = (stream_index + 1) % num_extra_streams;
 
-				cudaEvent_t e;
-				GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+				cudaEvent_t& e = events[event_index].get();
+                                event_index = (event_index + 1) % num_events;
 
 				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&s));
 
@@ -181,7 +213,6 @@ struct packer<gpu>
 				// to allow waiting for all work on the main stream.
 				GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
 				GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
-				GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
                         }
                         ++count;
                     }
