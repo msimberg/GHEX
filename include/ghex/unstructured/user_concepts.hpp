@@ -550,17 +550,29 @@ class data_descriptor<gpu, DomainId, Idx, T>
     template<typename IndexContainer>
     void pack(value_type* buffer, const IndexContainer& c, void* stream_ptr)
     {
+        cudaStream_t& stream = *(reinterpret_cast<cudaStream_t*>(stream_ptr));
+
         for (const auto& is : c)
         {
+            cudaStream_t s;
+            cudaEvent_t e;
+            GHEX_CHECK_CUDA_RESULT(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+            GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+
             const int n_blocks =
                 static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
                                            GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
             const std::size_t buffer_index_stride = m_levels_first ? m_levels : 1u;
             const std::size_t buffer_level_stride = m_levels_first ? 1u : is.local_indices().size();
             pack_kernel<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
-                0, *(reinterpret_cast<cudaStream_t*>(stream_ptr))>>>(m_values,
+                0, s>>>(m_values,
                 is.local_indices().size(), is.local_indices().data(), m_levels, buffer,
                 m_index_stride, m_level_stride, buffer_index_stride, buffer_level_stride);
+
+            GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
+            GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
+            GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
+            GHEX_CHECK_CUDA_RESULT(cudaStreamDestroy(s));
         }
     }
 
