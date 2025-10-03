@@ -12,6 +12,7 @@
 #include <ghex/config.hpp>
 #include <ghex/arch_traits.hpp>
 #include <ghex/device/cuda/error.hpp>
+#include <ghex/device/cuda/stream.hpp>
 #ifdef GHEX_CUDACC
 #include <ghex/device/cuda/runtime.hpp>
 #endif
@@ -593,17 +594,49 @@ class data_descriptor<gpu, DomainId, Idx, T>
     template<typename IndexContainer>
     void unpack(const value_type* buffer, const IndexContainer& c, void* stream_ptr)
     {
+        constexpr std::size_t num_extra_streams{32};
+        static std::vector<device::stream> streams(num_extra_streams);
+        static std::size_t stream_index{0};
+
+        constexpr std::size_t num_events{128};
+        static std::vector<device::cuda_event> events(num_events);
+        static std::size_t event_index{0};
+
+        auto& stream = *(reinterpret_cast<cudaStream_t*>(stream_ptr));
+        int count = 0;
         for (const auto& is : c)
         {
-            const int n_blocks =
-                static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
-                                           GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
-            const std::size_t buffer_index_stride = m_levels_first ? m_levels : 1u;
-            const std::size_t buffer_level_stride = m_levels_first ? 1u : is.local_indices().size();
-            unpack_kernel<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
-                0, *(reinterpret_cast<cudaStream_t*>(stream_ptr))>>>(buffer,
-                is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
-                m_index_stride, m_level_stride, buffer_index_stride, buffer_level_stride);
+            if (count == 0) {
+                const int n_blocks =
+                    static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
+                                               GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
+                const std::size_t buffer_index_stride = m_levels_first ? m_levels : 1u;
+                const std::size_t buffer_level_stride = m_levels_first ? 1u : is.local_indices().size();
+                unpack_kernel<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    0, stream>>>(buffer,
+                    is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                    m_index_stride, m_level_stride, buffer_index_stride, buffer_level_stride);
+            } else {
+                cudaStream_t& s = streams[stream_index].get();
+                stream_index = (stream_index + 1) % num_extra_streams;
+                
+                cudaEvent_t& e = events[event_index].get();
+                event_index = (event_index + 1) % num_events;
+                
+                const int n_blocks =
+                    static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
+                                               GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
+                const std::size_t buffer_index_stride = m_levels_first ? m_levels : 1u;
+                const std::size_t buffer_level_stride = m_levels_first ? 1u : is.local_indices().size();
+                unpack_kernel<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    0, stream>>>(buffer,
+                    is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                    m_index_stride, m_level_stride, buffer_index_stride, buffer_level_stride);
+
+                GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
+                GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
+            }
+            ++count;
         }
     }
 };
