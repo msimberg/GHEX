@@ -228,7 +228,7 @@ struct packer<gpu>
                 cudaEvent_t& e = events[event_index].get();
                 event_index = (event_index + 1) % num_events;
                 
-                fb.call_back(data + fb.offset, *fb.index_container, (void*)(&stream.get()));
+                fb.call_back(data + fb.offset, *fb.index_container, (void*)(&s));
 
                 GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
                 GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
