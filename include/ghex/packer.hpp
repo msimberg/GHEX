@@ -124,6 +124,10 @@ struct packer<gpu>
     template<typename Map, typename Requests, typename Communicator>
     static void pack(Map& map, Requests& send_reqs, Communicator& comm)
     {
+        constexpr std::size_t num_extra_streams{32};
+        static std::vector<device::stream> streams(num_extra_streams);
+        static std::size_t stream_index{0};
+
         using send_buffer_type = typename Map::send_buffer_type;
         using future_type = device::future<send_buffer_type*>;
         std::size_t num_streams = 0;
@@ -164,9 +168,10 @@ struct packer<gpu>
                         if (count == 0) {
 				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
                         } else {
-				cudaStream_t s;
+                                cudaStream_t& s = streams[stream_index].get();
+                                stream_index = (stream_index + 1) % num_extra_streams;
+
 				cudaEvent_t e;
-				GHEX_CHECK_CUDA_RESULT(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
 				GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
 
 				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&s));
@@ -177,7 +182,6 @@ struct packer<gpu>
 				GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
 				GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
 				GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
-				GHEX_CHECK_CUDA_RESULT(cudaStreamDestroy(s));
                         }
                         ++count;
                     }
