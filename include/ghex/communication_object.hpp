@@ -477,7 +477,8 @@ class communication_object
     {
         for_each(m_mem, [this](std::size_t, auto& m) {
             using arch_type = typename std::remove_reference_t<decltype(m)>::arch_type;
-            packer<arch_type>::pack(m, m_send_reqs, m_comm);
+            packer<arch_type>::pack2(m, m_send_reqs, m_comm);
+            // std::vector<device::future<typename decltype(m)::send_buffer_type*> futures = packer<arch_type>::pack_async(m, m_send_reqs, m_comm);
         });
     }
 

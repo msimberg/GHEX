@@ -52,6 +52,12 @@ struct packer
         }
     }
 
+    template<typename Map, typename Requests, typename Communicator>
+    static void pack2(Map& map, Requests& send_reqs, Communicator& comm)
+    {
+        pack(map, send_reqs, comm);
+    }
+
     template<typename Buffer>
     static void unpack(Buffer& buffer, unsigned char* data)
     {
@@ -202,6 +208,115 @@ struct packer<gpu>
         }
         await_futures(stream_futures, [&comm, &send_reqs](send_buffer_type* b)
             { send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag)); });
+    }
+
+    template<typename Map, typename Requests, typename Communicator>
+    static void pack2(Map& map, Requests& send_reqs, Communicator& comm)
+    {
+        constexpr std::size_t num_extra_streams{32};
+        static std::vector<device::stream> streams(num_extra_streams);
+        static std::size_t stream_index{0};
+
+        constexpr std::size_t num_events{128};
+        static std::vector<device::cuda_event> events(num_events);
+        static std::size_t event_index{0};
+
+        using send_buffer_type = typename Map::send_buffer_type;
+        // using future_type = device::future<send_buffer_type*>;
+        std::size_t num_streams = 0;
+
+        for (auto& p0 : map.send_memory)
+        {
+            const auto device_id = p0.first;
+            for (auto& p1 : p0.second)
+            {
+                if (p1.second.size > 0u)
+                {
+                    if (!p1.second.buffer || p1.second.buffer.size() != p1.second.size ||
+                        p1.second.buffer.device_id() != device_id)
+                        p1.second.buffer =
+                            arch_traits<gpu>::make_message(comm, p1.second.size, device_id);
+                    ++num_streams;
+                }
+            }
+        }
+        // std::vector<future_type> stream_futures;
+        std::vector<send_buffer_type*> stream_x;
+        // stream_futures.reserve(num_streams);
+        stream_x.reserve(num_streams);
+        num_streams = 0;
+        for (auto& p0 : map.send_memory)
+        {
+            for (auto& p1 : p0.second)
+            {
+                if (p1.second.size > 0u)
+                {
+                    device::guard g(p1.second.buffer);
+                    int count = 0;
+                    for (const auto& fb : p1.second.field_infos)
+                    {
+                        // TODO:
+                        // 1. launch pack kernels on separate streams for all data
+                        // 1. (alternative) pack them all into the same kernel
+                        // 2. trigger the send from a cuda host function
+                        // 3. don't wait for futures here, but mixed with polling mpi for receives
+                        if (count == 0) {
+				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
+                        } else {
+                                cudaStream_t& s = streams[stream_index].get();
+                                stream_index = (stream_index + 1) % num_extra_streams;
+
+				cudaEvent_t& e = events[event_index].get();
+                                event_index = (event_index + 1) % num_events;
+
+				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&s));
+
+				// Use the main stream only to synchronize. Launch
+				// the work on a separate stream and insert an event
+				// to allow waiting for all work on the main stream.
+				GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
+				GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
+                        }
+                        ++count;
+                    }
+                    // GHEX_CHECK_CUDA_RESULT(
+                    // cudaLaunchHostFunc(&p1.second.m_stream.get(), [](void* p) {
+                    //     auto& comm = *static_cast<communicator_type*>(p);
+                    //     comm.send(b->buffer, b->rank, b->tag);
+                    // }, static_cast<void*>(&comm)));
+                    // stream_futures.push_back(future_type{&(p1.second), p1.second.m_stream});
+                    stream_x.push_back(&(p1.second));
+                    // unused:
+                    // ++num_streams;
+                }
+            }
+        }
+        // await_futures(stream_futures, [&comm, &send_reqs](send_buffer_type* b)
+        //     { send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag)); });
+        // await_futures(std::vector<Future>& range, Continuation&& cont)
+        auto cont = [&comm, &send_reqs](send_buffer_type* b)
+            { send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag)); };
+        // static thread_local std::vector<int> index_list;
+        // index_list.resize(futures.size());
+        // std::iota(index_list.begin(), index_list.end(), 0);
+        const auto begin = stream_x.begin();
+        auto       end = stream_x.end();
+        while (begin != end)
+        {
+            end = std::remove_if(begin, end,
+                [&](auto& item)
+                {
+                    auto r = cudaStreamQuery(item->m_stream.get());
+                    if (r == cudaSuccess)
+                    {
+                        cont(item);
+                        return true;
+                    }
+                    else
+                        return false;
+                });
+            // comm.progress();
+        }
     }
 
     template<typename Buffer>
