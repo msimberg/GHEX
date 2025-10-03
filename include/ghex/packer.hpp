@@ -238,6 +238,10 @@ struct packer<gpu>
         static std::vector<device::stream> streams(num_extra_streams);
         static std::size_t stream_index{0};
 
+        constexpr std::size_t num_events{128};
+        static std::vector<detail::cuda_event> events(num_events);
+        static std::size_t event_index{0};
+
         auto& stream = buffer.m_stream;
         int count = 0;
         for (const auto& fb : buffer.field_infos)
@@ -248,14 +252,13 @@ struct packer<gpu>
                 cudaStream_t& s = streams[stream_index].get();
                 stream_index = (stream_index + 1) % num_extra_streams;
                 
-                cudaEvent_t e;
-                GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+                cudaEvent_t& e = events[event_index].get();
+                event_index = (event_index + 1) % num_events;
                 
                 fb.call_back(data + fb.offset, *fb.index_container, (void*)(&stream.get()));
 
                 GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
                 GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
-                GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
             }
             ++count;
         }
