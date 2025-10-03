@@ -203,10 +203,31 @@ struct packer<gpu>
     template<typename Buffer>
     static void unpack(Buffer& buffer, unsigned char* data)
     {
+        constexpr std::size_t num_extra_streams{32};
+        static std::vector<device::stream> streams(num_extra_streams);
+        static std::size_t stream_index{0};
+
         auto& stream = buffer.m_stream;
-        // TODO: Do same as for pack, i.e. use one stream per field_info
+        int count = 0;
         for (const auto& fb : buffer.field_infos)
-            fb.call_back(data + fb.offset, *fb.index_container, (void*)(&stream.get()));
+        {
+            if (count == 0) {
+                fb.call_back(data + fb.offset, *fb.index_container, (void*)(&stream.get()));
+            } else {
+                cudaStream_t& s = streams[stream_index].get();
+                stream_index = (stream_index + 1) % num_extra_streams;
+                
+                cudaEvent_t e;
+                GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+                
+                fb.call_back(data + fb.offset, *fb.index_container, (void*)(&stream.get()));
+
+                GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
+                GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
+                GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
+            }
+            ++count;
+        }
     }
 
     template<typename T, typename FieldType, typename Map, typename Requests, typename Communicator>
