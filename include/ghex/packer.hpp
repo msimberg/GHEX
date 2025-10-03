@@ -153,6 +153,7 @@ struct packer<gpu>
                 if (p1.second.size > 0u)
                 {
                     device::guard g(p1.second.buffer);
+                    int count = 0;
                     for (const auto& fb : p1.second.field_infos)
                     {
                         // TODO:
@@ -160,20 +161,25 @@ struct packer<gpu>
                         // 1. (alternative) pack them all into the same kernel
                         // 2. trigger the send from a cuda host function
                         // 3. don't wait for futures here, but mixed with polling mpi for receives
-                        cudaStream_t s;
-                        cudaEvent_t e;
-                        GHEX_CHECK_CUDA_RESULT(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
-                        GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+                        if (count == 0) {
+				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
+                        } else {
+				cudaStream_t s;
+				cudaEvent_t e;
+				GHEX_CHECK_CUDA_RESULT(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+				GHEX_CHECK_CUDA_RESULT(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
 
-                        fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&s));
+				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&s));
 
-                        // Use the main stream only to synchronize. Launch
-                        // the work on a separate stream and insert an event
-                        // to allow waiting for all work on the main stream.
-                        GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
-                        GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
-                        GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
-                        GHEX_CHECK_CUDA_RESULT(cudaStreamDestroy(s));
+				// Use the main stream only to synchronize. Launch
+				// the work on a separate stream and insert an event
+				// to allow waiting for all work on the main stream.
+				GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
+				GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
+				GHEX_CHECK_CUDA_RESULT(cudaEventDestroy(e));
+				GHEX_CHECK_CUDA_RESULT(cudaStreamDestroy(s));
+                        }
+                        ++count;
                     }
                     // GHEX_CHECK_CUDA_RESULT(
                     // cudaLaunchHostFunc(&p1.second.m_stream.get(), [](void* p) {
