@@ -292,7 +292,7 @@ struct packer<gpu>
             }
         }
 
-        comm.progress();
+        // comm.progress();
 
         // await_futures(stream_futures, [&comm, &send_reqs](send_buffer_type* b)
         //     { send_reqs.push_back(comm.send(b->buffer, b->rank, b->tag)); });
