@@ -622,30 +622,30 @@ class data_descriptor<gpu, DomainId, Idx, T>
         for (const auto& is : c)
         {
             // if (count == 0) {
-	    const int n_blocks =
-	        static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
-                                        GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
 	    // const int n_blocks =
-	    //     static_cast<int>(std::ceil(static_cast<double>(m_levels * is.local_indices().size()) /
-	    //     			   GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
+	    //     static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
+            //                             GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
+	    const int n_blocks =
+	        static_cast<int>(std::ceil(static_cast<double>(m_levels * is.local_indices().size()) /
+                                        GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
             if (m_levels_first) {
-                pack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
-                    0, stream>>>(m_values,
-                    is.local_indices().size(), is.local_indices().data(), m_levels, buffer,
-                    m_index_stride, m_levels);
-	        // pack_kernel_levels_first_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
-	        //     0, stream>>>(m_values,
-	        //     is.local_indices().size(), is.local_indices().data(), m_levels, buffer,
-	        //     m_index_stride, m_levels);
-            } else {
-	        pack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                // pack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                //     0, stream>>>(m_values,
+                //     is.local_indices().size(), is.local_indices().data(), m_levels, buffer,
+                //     m_index_stride, m_levels);
+	        pack_kernel_levels_first_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
 	            0, stream>>>(m_values,
 	            is.local_indices().size(), is.local_indices().data(), m_levels, buffer,
-	            m_level_stride, is.local_indices().size());
-	        // pack_kernel_levels_last_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+	            m_index_stride, m_levels);
+            } else {
+	        // pack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
 	        //     0, stream>>>(m_values,
 	        //     is.local_indices().size(), is.local_indices().data(), m_levels, buffer,
 	        //     m_level_stride, is.local_indices().size());
+	        pack_kernel_levels_last_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+	            0, stream>>>(m_values,
+	            is.local_indices().size(), is.local_indices().data(), m_levels, buffer,
+	            m_level_stride, is.local_indices().size());
             }
         }
     }
