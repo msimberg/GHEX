@@ -574,6 +574,22 @@ unpack_kernel_levels_first(const T* buffer, const std::size_t local_indices_size
 
 template<typename T>
 __global__ void
+unpack_kernel_levels_first_2(const T* buffer, const std::size_t local_indices_size,
+    const std::size_t* local_indices, const std::size_t levels, T* values,
+    const std::size_t index_stride, const std::size_t buffer_index_stride)
+{
+    const std::size_t global_idx = threadIdx.x + (blockIdx.x * blockDim.x);
+    const std::size_t idx = global_idx / buffer_index_stride;
+    const std::size_t level = global_idx % buffer_index_stride;
+    if (idx < local_indices_size && level < levels)
+    {
+        auto const local_index = local_indices[idx];
+        values[local_index * index_stride + level] = buffer[idx * buffer_index_stride + level];
+    }
+}
+
+template<typename T>
+__global__ void
 unpack_kernel_levels_last(const T* buffer, const std::size_t local_indices_size,
     const std::size_t* local_indices, const std::size_t levels, T* values,
     const std::size_t level_stride, const std::size_t buffer_level_stride)
@@ -585,6 +601,22 @@ unpack_kernel_levels_last(const T* buffer, const std::size_t local_indices_size,
         {
             values[local_indices[idx] + level * level_stride] = buffer[idx + level * buffer_level_stride];
         }
+    }
+}
+
+template<typename T>
+__global__ void
+unpack_kernel_levels_last_2(const T* buffer, const std::size_t local_indices_size,
+    const std::size_t* local_indices, const std::size_t levels, T* values,
+    const std::size_t level_stride, const std::size_t buffer_level_stride)
+{
+    const std::size_t global_idx = threadIdx.x + (blockIdx.x * blockDim.x);
+    const std::size_t idx = global_idx % buffer_level_stride;
+    const std::size_t level = global_idx / buffer_level_stride;
+    if (idx < local_indices_size && level < levels)
+    {
+        auto const local_index = local_indices[idx];
+        values[local_index + level * level_stride] = buffer[idx + level * buffer_level_stride];
     }
 }
 
@@ -698,16 +730,27 @@ class data_descriptor<gpu, DomainId, Idx, T>
         for (const auto& is : c)
         {
             if (count == 0) {
+                // const int n_blocks =
+                //     static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
+                //                                GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
                 const int n_blocks =
-                    static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
+                    static_cast<int>(std::ceil(static_cast<double>(m_levels * is.local_indices().size()) /
                                                GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
                 if (m_levels_first) {
-                    unpack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    // unpack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    //     0, stream>>>(buffer,
+                    //     is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                    //     m_index_stride, m_levels);
+                    unpack_kernel_levels_first_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
                         0, stream>>>(buffer,
                         is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
                         m_index_stride, m_levels);
                 } else {
-                    unpack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    // unpack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    //     0, stream>>>(buffer,
+                    //     is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                    //     m_level_stride, is.local_indices().size());
+                    unpack_kernel_levels_last_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
                         0, stream>>>(buffer,
                         is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
                         m_level_stride, is.local_indices().size());
@@ -719,16 +762,27 @@ class data_descriptor<gpu, DomainId, Idx, T>
                 cudaEvent_t& e = events[event_index].get();
                 event_index = (event_index + 1) % num_events;
                 
+                // const int n_blocks =
+                //     static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
+                //                                GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
                 const int n_blocks =
-                    static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
+                    static_cast<int>(std::ceil(static_cast<double>(m_levels * is.local_indices().size()) /
                                                GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
                 if (m_levels_first) {
-                    unpack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    // unpack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    //     0, s>>>(buffer,
+                    //     is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                    //     m_index_stride, m_levels);
+                    unpack_kernel_levels_first_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
                         0, s>>>(buffer,
                         is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
                         m_index_stride, m_levels);
                 } else {
-                    unpack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    // unpack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                    //     0, s>>>(buffer,
+                    //     is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                    //     m_level_stride, is.local_indices().size());
+                    unpack_kernel_levels_last_2<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
                         0, s>>>(buffer,
                         is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
                         m_level_stride, is.local_indices().size());
