@@ -556,6 +556,38 @@ unpack_kernel(const T* buffer, const std::size_t local_indices_size,
     }
 }
 
+template<typename T>
+__global__ void
+unpack_kernel_levels_first(const T* buffer, const std::size_t local_indices_size,
+    const std::size_t* local_indices, const std::size_t levels, T* values,
+    const std::size_t index_stride, const std::size_t buffer_index_stride)
+{
+    const std::size_t idx = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (idx < local_indices_size)
+    {
+        for (std::size_t level = 0; level < levels; ++level)
+        {
+            values[local_indices[idx] * index_stride + level] = buffer[idx * buffer_index_stride + level];
+        }
+    }
+}
+
+template<typename T>
+__global__ void
+unpack_kernel_levels_last(const T* buffer, const std::size_t local_indices_size,
+    const std::size_t* local_indices, const std::size_t levels, T* values,
+    const std::size_t level_stride, const std::size_t buffer_level_stride)
+{
+    const std::size_t idx = threadIdx.x + (blockIdx.x * blockDim.x);
+    if (idx < local_indices_size)
+    {
+        for (std::size_t level = 0; level < levels; ++level)
+        {
+            values[local_indices[idx] + level * level_stride] = buffer[idx + level * buffer_level_stride];
+        }
+    }
+}
+
 /** @brief data descriptor for unstructured grids (GPU specialization)*/
 template<typename DomainId, typename Idx, typename T>
 class data_descriptor<gpu, DomainId, Idx, T>
@@ -669,12 +701,17 @@ class data_descriptor<gpu, DomainId, Idx, T>
                 const int n_blocks =
                     static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
                                                GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
-                const std::size_t buffer_index_stride = m_levels_first ? m_levels : 1u;
-                const std::size_t buffer_level_stride = m_levels_first ? 1u : is.local_indices().size();
-                unpack_kernel<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
-                    0, stream>>>(buffer,
-                    is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
-                    m_index_stride, m_level_stride, buffer_index_stride, buffer_level_stride);
+                if (m_levels_first) {
+                    unpack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                        0, stream>>>(buffer,
+                        is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                        m_index_stride, m_levels);
+                } else {
+                    unpack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                        0, stream>>>(buffer,
+                        is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                        m_level_stride, is.local_indices().size());
+                }
             } else {
                 cudaStream_t& s = streams[stream_index].get();
                 stream_index = (stream_index + 1) % num_extra_streams;
@@ -685,12 +722,17 @@ class data_descriptor<gpu, DomainId, Idx, T>
                 const int n_blocks =
                     static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
                                                GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
-                const std::size_t buffer_index_stride = m_levels_first ? m_levels : 1u;
-                const std::size_t buffer_level_stride = m_levels_first ? 1u : is.local_indices().size();
-                unpack_kernel<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
-                    0, stream>>>(buffer,
-                    is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
-                    m_index_stride, m_level_stride, buffer_index_stride, buffer_level_stride);
+                if (m_levels_first) {
+                    unpack_kernel_levels_first<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                        0, s>>>(buffer,
+                        is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                        m_index_stride, m_levels);
+                } else {
+                    unpack_kernel_levels_last<value_type><<<n_blocks, GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK,
+                        0, s>>>(buffer,
+                        is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
+                        m_level_stride, is.local_indices().size());
+                }
 
                 GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
                 GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
