@@ -361,6 +361,7 @@ struct packer<gpu>
     template<typename Buffer>
     static void unpack(Buffer& buffer, unsigned char* data)
     {
+#if 0
         constexpr std::size_t num_extra_streams{32};
         static std::vector<device::stream> streams(num_extra_streams);
         static std::size_t stream_index{0};
@@ -368,13 +369,19 @@ struct packer<gpu>
         constexpr std::size_t num_events{128};
         static std::vector<device::cuda_event> events(num_events);
         static std::size_t event_index{0};
+#endif
 
         auto& stream = buffer.m_stream;
+#if 0
         int count = 0;
+#endif
         for (const auto& fb : buffer.field_infos)
         {
+#if 0
             if (count == 0) {
+#endif
                 fb.call_back(data + fb.offset, *fb.index_container, (void*)(&stream.get()));
+#if 0
             } else {
                 cudaStream_t& s = streams[stream_index].get();
                 stream_index = (stream_index + 1) % num_extra_streams;
@@ -388,6 +395,7 @@ struct packer<gpu>
                 GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
             }
             ++count;
+#endif
         }
     }
 
