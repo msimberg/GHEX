@@ -717,6 +717,7 @@ class data_descriptor<gpu, DomainId, Idx, T>
     template<typename IndexContainer>
     void unpack(const value_type* buffer, const IndexContainer& c, void* stream_ptr)
     {
+#if 0
         constexpr std::size_t num_extra_streams{32};
         static std::vector<device::stream> streams(num_extra_streams);
         static std::size_t stream_index{0};
@@ -724,12 +725,17 @@ class data_descriptor<gpu, DomainId, Idx, T>
         constexpr std::size_t num_events{128};
         static std::vector<device::cuda_event> events(num_events);
         static std::size_t event_index{0};
+#endif
 
         auto& stream = *(reinterpret_cast<cudaStream_t*>(stream_ptr));
+#if 0
         int count = 0;
+#endif
         for (const auto& is : c)
         {
+#if 0
             if (count == 0) {
+#endif
                 // const int n_blocks =
                 //     static_cast<int>(std::ceil(static_cast<double>(is.local_indices().size()) /
                 //                                GHEX_UNSTRUCTURED_SERIALIZATION_THREADS_PER_BLOCK));
@@ -755,6 +761,7 @@ class data_descriptor<gpu, DomainId, Idx, T>
                         is.local_indices().size(), is.local_indices().data(), m_levels, m_values,
                         m_level_stride, is.local_indices().size());
                 }
+#if 0
             } else {
                 cudaStream_t& s = streams[stream_index].get();
                 stream_index = (stream_index + 1) % num_extra_streams;
@@ -792,6 +799,7 @@ class data_descriptor<gpu, DomainId, Idx, T>
                 GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(stream, e));
             }
             ++count;
+#endif
         }
     }
 };

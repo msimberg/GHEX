@@ -131,6 +131,7 @@ struct packer<gpu>
     template<typename Map, typename Requests, typename Communicator>
     static void pack(Map& map, Requests& send_reqs, Communicator& comm)
     {
+#if 0
         constexpr std::size_t num_extra_streams{32};
         static std::vector<device::stream> streams(num_extra_streams);
         static std::size_t stream_index{0};
@@ -138,6 +139,7 @@ struct packer<gpu>
         constexpr std::size_t num_events{128};
         static std::vector<device::cuda_event> events(num_events);
         static std::size_t event_index{0};
+#endif
 
         using send_buffer_type = typename Map::send_buffer_type;
         using future_type = device::future<send_buffer_type*>;
@@ -168,7 +170,9 @@ struct packer<gpu>
                 if (p1.second.size > 0u)
                 {
                     device::guard g(p1.second.buffer);
+#if 0
                     int count = 0;
+#endif
                     for (const auto& fb : p1.second.field_infos)
                     {
                         // TODO:
@@ -176,8 +180,11 @@ struct packer<gpu>
                         // 1. (alternative) pack them all into the same kernel
                         // 2. trigger the send from a cuda host function
                         // 3. don't wait for futures here, but mixed with polling mpi for receives
+#if 0
                         if (count == 0) {
+#endif
 				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
+#if 0
                         } else {
                                 cudaStream_t& s = streams[stream_index].get();
                                 stream_index = (stream_index + 1) % num_extra_streams;
@@ -194,6 +201,7 @@ struct packer<gpu>
 				GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
                         }
                         ++count;
+#endif
                     }
                     // GHEX_CHECK_CUDA_RESULT(
                     // cudaLaunchHostFunc(&p1.second.m_stream.get(), [](void* p) {
@@ -213,6 +221,7 @@ struct packer<gpu>
     template<typename Map, typename Requests, typename Communicator>
     static void pack2(Map& map, Requests& send_reqs, Communicator& comm)
     {
+#if 0
         constexpr std::size_t num_extra_streams{32};
         static std::vector<device::stream> streams(num_extra_streams);
         static std::size_t stream_index{0};
@@ -220,6 +229,7 @@ struct packer<gpu>
         constexpr std::size_t num_events{128};
         static std::vector<device::cuda_event> events(num_events);
         static std::size_t event_index{0};
+#endif
 
         using send_buffer_type = typename Map::send_buffer_type;
         // using future_type = device::future<send_buffer_type*>;
@@ -252,7 +262,9 @@ struct packer<gpu>
                 if (p1.second.size > 0u)
                 {
                     device::guard g(p1.second.buffer);
+#if 0
                     int count = 0;
+#endif
                     for (const auto& fb : p1.second.field_infos)
                     {
                         // TODO:
@@ -260,8 +272,11 @@ struct packer<gpu>
                         // 1. (alternative) pack them all into the same kernel
                         // 2. trigger the send from a cuda host function
                         // 3. don't wait for futures here, but mixed with polling mpi for receives
+#if 0
                         if (count == 0) {
+#endif
 				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
+#if 0
                         } else {
                                 cudaStream_t& s = streams[stream_index].get();
                                 stream_index = (stream_index + 1) % num_extra_streams;
@@ -278,6 +293,7 @@ struct packer<gpu>
 				GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
                         }
                         ++count;
+#endif
                     }
                     // GHEX_CHECK_CUDA_RESULT(
                     // cudaLaunchHostFunc(&p1.second.m_stream.get(), [](void* p) {
