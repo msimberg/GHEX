@@ -229,24 +229,33 @@ class communication_object
         ncclGetUniqueId(&id);
       }
       MPI_Comm mpi_comm = m_comm.mpi_comm();
+
       std::ostringstream msg;
       msg << "doing MPI_Bcast on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg.str();
-      MPI_Bcast(&id, sizeof(id), MPI_CHAR, 0, mpi_comm);
+
+      MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, mpi_comm);
+      // TODO: Is this needed?
+      MPI_Barrier(mpi_comm);
+
       std::ostringstream msg_done;
       msg << "finished MPI_Bcast on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_done.str();
+
       std::ostringstream msg_init;
       msg << "initializing nccl communicator on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_init.str();
+
       GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
       ncclResult_t state;
       do {
         std::ostringstream msg_ready;
         msg << "checking if nccl communicator init is still in progress on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
         std::cerr << msg_ready.str();
+
         GHEX_CHECK_NCCL_RESULT(ncclCommGetAsyncError(m_nccl_comm, &state));
       } while(state == ncclInProgress);
+
       std::ostringstream msg_init_done;
       msg << "nccl communicator init done on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_init_done.str();
