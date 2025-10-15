@@ -222,8 +222,8 @@ class communication_object
     : m_valid(false)
     , m_comm(c.transport_context()->get_communicator())
     {
-      ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
-      config.blocking = 0;
+      // ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
+      // config.blocking = 0;
       ncclUniqueId id;
       if (m_comm.rank() == 0) {
         ncclGetUniqueId(&id);
@@ -246,7 +246,8 @@ class communication_object
       msg << "initializing nccl communicator on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_init.str();
 
-      GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
+      // GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
+      GHEX_CHECK_NCCL_RESULT(ncclCommInitRank(&m_nccl_comm, m_comm.size(), id, m_comm.rank()));
       ncclResult_t state;
       do {
         std::ostringstream msg_ready;
