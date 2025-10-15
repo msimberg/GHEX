@@ -228,8 +228,14 @@ class communication_object
       if (m_comm.rank() == 0) {
         ncclGetUniqueId(&id);
       }
-      // MPI_Comm mpi_comm = m_comm.mpi_comm();
-      // MPI_Bcast(&id, sizeof(id), MPI_CHAR, 0, mpi_comm);
+      MPI_Comm mpi_comm = m_comm.mpi_comm();
+      std::ostringstream msg;
+      msg << "doing MPI_Bcast on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
+      std::cerr << msg.str();
+      MPI_Bcast(&id, sizeof(id), MPI_CHAR, 0, mpi_comm);
+      std::ostringstream msg_done;
+      msg << "finished MPI_Bcast on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
+      std::cerr << msg_done.str();
       // GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
       // ncclResult_t state;
       // do {
