@@ -23,6 +23,13 @@
 #include <map>
 #include <stdio.h>
 #include <functional>
+#ifdef GHEX_USE_NCCL
+#include <nccl.h>
+
+#define GHEX_CHECK_NCCL_RESULT(x) \
+    if (x != ncclSuccess) \
+        throw std::runtime_error("nccl call failed");
+#endif
 
 namespace ghex
 {
@@ -212,12 +219,29 @@ class communication_object
     memory_type                    m_mem;
     std::vector<send_request_type> m_send_reqs;
     std::vector<recv_request_type> m_recv_reqs;
+    ncclComm_t m_nccl_comm;
 
   public: // ctors
     communication_object(context& c)
     : m_valid(false)
     , m_comm(c.transport_context()->get_communicator())
     {
+      ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
+      config.blocking = 0;
+      ncclUniqueId id;
+      if (m_comm.rank() == 0) {
+        ncclGetUniqueId(&id);
+      }
+      MPI_Comm mpi_comm = m_comm.mpi_comm();
+      MPI_Bcast(&id, sizeof(id), MPI_CHAR, 0, mpi_comm);
+      GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
+      ncclResult_t state;
+      do {
+        GHEX_CHECK_NCCL_RESULT(ncclCommGetAsyncError(m_nccl_comm, &state));
+        // Handle outside events, timeouts, progress, ...
+      } while(state == ncclInProgress);
+
+      GHEX_CHECK_NCCL_RESULT(ncclCommDestroy(m_nccl_comm));
     }
     communication_object(const communication_object&) = delete;
     communication_object(communication_object&&) = default;
