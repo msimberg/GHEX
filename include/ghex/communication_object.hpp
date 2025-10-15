@@ -239,11 +239,11 @@ class communication_object
       MPI_Barrier(mpi_comm);
 
       std::ostringstream msg_done;
-      msg << "finished MPI_Bcast on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
+      msg_done << "finished MPI_Bcast on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_done.str();
 
       std::ostringstream msg_init;
-      msg << "initializing nccl communicator on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
+      msg_init << "initializing nccl communicator on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_init.str();
 
       // GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
@@ -251,19 +251,19 @@ class communication_object
       ncclResult_t state;
       do {
         std::ostringstream msg_ready;
-        msg << "checking if nccl communicator init is still in progress on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
+        msg_ready << "checking if nccl communicator init is still in progress on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
         std::cerr << msg_ready.str();
 
         GHEX_CHECK_NCCL_RESULT(ncclCommGetAsyncError(m_nccl_comm, &state));
       } while(state == ncclInProgress);
 
       std::ostringstream msg_init_done;
-      msg << "nccl communicator init done on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
+      msg_init_done << "nccl communicator init done on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_init_done.str();
     }
     ~communication_object() noexcept {
       // TODO: nothrow
-      // GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
+      GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
     }
     communication_object(const communication_object&) = delete;
     communication_object(communication_object&&) = default;
