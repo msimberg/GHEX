@@ -228,18 +228,18 @@ class communication_object
       if (m_comm.rank() == 0) {
         ncclGetUniqueId(&id);
       }
-      MPI_Comm mpi_comm = m_comm.mpi_comm();
-      MPI_Bcast(&id, sizeof(id), MPI_CHAR, 0, mpi_comm);
-      GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
-      ncclResult_t state;
-      do {
-        GHEX_CHECK_NCCL_RESULT(ncclCommGetAsyncError(m_nccl_comm, &state));
-        // Handle outside events, timeouts, progress, ...
-      } while(state == ncclInProgress);
+      // MPI_Comm mpi_comm = m_comm.mpi_comm();
+      // MPI_Bcast(&id, sizeof(id), MPI_CHAR, 0, mpi_comm);
+      // GHEX_CHECK_NCCL_RESULT(ncclCommInitRankConfig(&m_nccl_comm, m_comm.size(), id, m_comm.rank(), &config));
+      // ncclResult_t state;
+      // do {
+      //   GHEX_CHECK_NCCL_RESULT(ncclCommGetAsyncError(m_nccl_comm, &state));
+      //   // Handle outside events, timeouts, progress, ...
+      // } while(state == ncclInProgress);
     }
     ~communication_object() noexcept {
       // TODO: nothrow
-      GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
+      // GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
     }
     communication_object(const communication_object&) = delete;
     communication_object(communication_object&&) = default;
