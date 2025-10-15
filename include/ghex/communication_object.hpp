@@ -283,6 +283,7 @@ class communication_object
 
       // recv
       // unpack
+      post_recvs_nccl();
       ncclGroupEnd();
     }
 
@@ -298,19 +299,19 @@ class communication_object
     template<typename... Archs, typename... Fields>
     [[nodiscard]] handle_type exchange(buffer_info_type<Archs, Fields>... buffer_infos)
     {
-        // nccl_exchange_impl(buffer_infos...);
-        exchange_impl(buffer_infos...);
-        // TODO: Assymetry here.
-        //
-        // post_recvs iterates through memory and fields here in the
-        // communication object, installs callbacks for unpacking per field
-        // (though one loop remains inside unpack).
-        //
-        // pack passes send_reqs and comm to pack, which does the iterating and
-        // installing callback. pack, however, waits for packs to complete to
-        // trigger sends.
-        post_recvs();
-        pack();
+        nccl_exchange_impl(buffer_infos...);
+        // exchange_impl(buffer_infos...);
+        // // TODO: Assymetry here.
+        // //
+        // // post_recvs iterates through memory and fields here in the
+        // // communication object, installs callbacks for unpacking per field
+        // // (though one loop remains inside unpack).
+        // //
+        // // pack passes send_reqs and comm to pack, which does the iterating and
+        // // installing callback. pack, however, waits for packs to complete to
+        // // trigger sends.
+        // post_recvs();
+        // pack();
         return {this};
     }
 
@@ -586,38 +587,38 @@ class communication_object
   private: // wait functions
     void progress()
     {
-        if (!m_valid) return;
-        m_comm.progress();
+        // if (!m_valid) return;
+        // m_comm.progress();
     }
 
     bool is_ready()
     {
-        if (!m_valid) return true;
-        if (m_comm.is_ready())
-        {
-#ifdef GHEX_CUDACC
-            sync_streams();
-#endif
-            clear();
-            return true;
-        }
-        m_comm.progress();
-        if (m_comm.is_ready())
-        {
-#ifdef GHEX_CUDACC
-            sync_streams();
-#endif
-            clear();
-            return true;
-        }
+        // if (!m_valid) return true;
+//         if (m_comm.is_ready())
+//         {
+// #ifdef GHEX_CUDACC
+//             sync_streams();
+// #endif
+//             clear();
+//             return true;
+//         }
+//         m_comm.progress();
+//         if (m_comm.is_ready())
+//         {
+// #ifdef GHEX_CUDACC
+//             sync_streams();
+// #endif
+//             clear();
+//             return true;
+//         }
         return false;
     }
 
     void wait()
     {
-        if (!m_valid) return;
-        // wait for data to arrive (unpack callback will be invoked)
-        m_comm.wait_all();
+//         if (!m_valid) return;
+//         // wait for data to arrive (unpack callback will be invoked)
+//         m_comm.wait_all();
 #ifdef GHEX_CUDACC
         sync_streams();
 #endif
