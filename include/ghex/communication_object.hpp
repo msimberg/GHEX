@@ -25,10 +25,6 @@
 #include <functional>
 #ifdef GHEX_USE_NCCL
 #include <nccl.h>
-
-#define GHEX_CHECK_NCCL_RESULT(x) \
-    if (x != ncclSuccess) \
-        throw std::runtime_error("nccl call failed");
 #endif
 
 namespace ghex
@@ -240,13 +236,32 @@ class communication_object
         GHEX_CHECK_NCCL_RESULT(ncclCommGetAsyncError(m_nccl_comm, &state));
         // Handle outside events, timeouts, progress, ...
       } while(state == ncclInProgress);
-
-      GHEX_CHECK_NCCL_RESULT(ncclCommDestroy(m_nccl_comm));
+    }
+    ~communication_object() noexcept {
+      // TODO: nothrow
+      GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
     }
     communication_object(const communication_object&) = delete;
     communication_object(communication_object&&) = default;
 
     communicator_type& communicator() { return m_comm; }
+
+  private:
+    template<typename... Archs, typename... Fields>
+    void nccl_exchange_impl(buffer_info_type<Archs, Fields>... buffer_infos) {
+      ncclGroupStart();
+      // pack
+      // send
+      for_each(m_mem, [this](std::size_t, auto& m) {
+          using arch_type = typename std::remove_reference_t<decltype(m)>::arch_type;
+          packer<arch_type>::pack2_nccl(m, m_send_reqs, m_comm, m_nccl_comm);
+      });
+
+      // recv
+      // unpack
+      ncclGroupEnd();
+    }
+
 
   public: // exchange arbitrary field-device-pattern combinations
     /** @brief non-blocking exchange of halo data
@@ -259,6 +274,7 @@ class communication_object
     template<typename... Archs, typename... Fields>
     [[nodiscard]] handle_type exchange(buffer_info_type<Archs, Fields>... buffer_infos)
     {
+        // nccl_exchange_impl(buffer_infos...);
         exchange_impl(buffer_infos...);
         // TODO: Assymetry here.
         //
@@ -491,6 +507,43 @@ class communication_object
                                 device::guard g(m);
                                 packer<arch_type>::unpack(*ptr, g.data());
                             }));
+                    }
+                }
+            }
+        });
+    }
+
+    void post_recvs_nccl()
+    {
+        for_each(m_mem, [this](std::size_t, auto& m) {
+            using arch_type = typename std::remove_reference_t<decltype(m)>::arch_type;
+            for (auto& p0 : m.recv_memory)
+            {
+                const auto device_id = p0.first;
+                for (auto& p1 : p0.second)
+                {
+                    if (p1.second.size > 0u)
+                    {
+                        if (!p1.second.buffer || p1.second.buffer.size() != p1.second.size
+#if defined(GHEX_USE_GPU) || defined(GHEX_GPU_MODE_EMULATE)
+                            || p1.second.buffer.device_id() != device_id
+#endif
+                        )
+                            p1.second.buffer = arch_traits<arch_type>::make_message(
+                                m_comm, p1.second.size, device_id);
+                        auto ptr = &p1.second;
+                        // TODO
+                        GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.data(), p1.second.buffer.size() * sizeof(typename decltype(p1.second.buffer)::value_type), ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
+                        device::guard g(m);
+                        packer<arch_type>::unpack(*ptr, g.data());
+
+                        // use callbacks for unpacking
+                        // m_recv_reqs.push_back(m_comm.recv(p1.second.buffer, p1.second.rank,
+                        //     p1.second.tag,
+                        //     [ptr](context::message_type& m, context::rank_type, context::tag_type) {
+                        //         device::guard g(m);
+                        //         packer<arch_type>::unpack(*ptr, g.data());
+                        //     }));
                     }
                 }
             }

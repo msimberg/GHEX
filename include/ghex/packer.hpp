@@ -20,6 +20,19 @@
 #include <ghex/device/cuda/runtime.hpp>
 #endif
 
+#ifdef GHEX_USE_NCCL
+#include <nccl.h>
+
+#define GHEX_CHECK_NCCL_RESULT(x) \
+    if (x != ncclSuccess && x != ncclInProgress) \
+        throw std::runtime_error(std::string("nccl call failed (") + std::to_string(x) + "):" + ncclGetErrorString(x));
+#define GHEX_CHECK_NCCL_RESULT_NO_THROW(x) \
+    if (x != ncclSuccess && x != ncclInProgress) { \
+        std::cerr << "nccl call failed (" << std::to_string(x) << "): " << ncclGetErrorString(x) << '\n'; \
+        std::terminate(); \
+    }
+#endif
+
 #include <numeric>
 
 namespace ghex
@@ -57,6 +70,9 @@ struct packer
     {
         pack(map, send_reqs, comm);
     }
+
+    template<typename Map, typename Requests, typename Communicator, typename NCCLCommunicator>
+    static void pack2_nccl(Map&, Requests&, Communicator&, NCCLCommunicator&) {}
 
     template<typename Buffer>
     static void unpack(Buffer& buffer, unsigned char* data)
@@ -355,6 +371,91 @@ struct packer<gpu>
                         return false;
                 });
             // comm.progress();
+        }
+    }
+
+    template<typename Map, typename Requests, typename Communicator, typename NCCLCommunicator>
+    static void pack2_nccl(Map& map, Requests& send_reqs, Communicator& comm, NCCLCommunicator& nccl_comm)
+    {
+#if 0
+        constexpr std::size_t num_extra_streams{32};
+        static std::vector<device::stream> streams(num_extra_streams);
+        static std::size_t stream_index{0};
+#endif
+
+        constexpr std::size_t num_events{128};
+        static std::vector<device::cuda_event> events(num_events);
+        static std::size_t event_index{0};
+
+        for (auto& p0 : map.send_memory)
+        {
+            const auto device_id = p0.first;
+            for (auto& p1 : p0.second)
+            {
+                if (p1.second.size > 0u)
+                {
+                    if (!p1.second.buffer || p1.second.buffer.size() != p1.second.size ||
+                        p1.second.buffer.device_id() != device_id)
+                        p1.second.buffer =
+                            arch_traits<gpu>::make_message(comm, p1.second.size, device_id);
+                }
+            }
+        }
+
+        // Assume that send memory synchronizes with the default
+        // stream so schedule pack kernels after an event on the
+        // default stream.
+        cudaEvent_t& e = events[event_index].get();
+        event_index = (event_index + 1) % num_events;
+        GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, 0));
+        for (auto& p0 : map.send_memory)
+        {
+            for (auto& p1 : p0.second)
+            {
+                if (p1.second.size > 0u)
+                {
+                    device::guard g(p1.second.buffer);
+#if 0
+                    int count = 0;
+#endif
+		    // Make sure stream used for packing synchronizes with the
+		    // default stream.
+                    GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
+                    for (const auto& fb : p1.second.field_infos)
+                    {
+                        // TODO:
+                        // 1. launch pack kernels on separate streams for all data
+                        // 1. (alternative) pack them all into the same kernel
+                        // 2. trigger the send from a cuda host function
+                        // 3. don't wait for futures here, but mixed with polling mpi for receives
+#if 0
+                        if (count == 0) {
+#endif
+				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
+#if 0
+                        } else {
+                                cudaStream_t& s = streams[stream_index].get();
+                                stream_index = (stream_index + 1) % num_extra_streams;
+
+				cudaEvent_t& e = events[event_index].get();
+                                event_index = (event_index + 1) % num_events;
+
+				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&s));
+
+				// Use the main stream only to synchronize. Launch
+				// the work on a separate stream and insert an event
+				// to allow waiting for all work on the main stream.
+				GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, s));
+				GHEX_CHECK_CUDA_RESULT(cudaStreamWaitEvent(p1.second.m_stream.get(), e));
+                        }
+                        ++count;
+#endif
+                    }
+
+                    // Warning: tag is not used. Messages have to be correctly ordered.
+                    GHEX_CHECK_NCCL_RESULT(ncclSend(p1.second.buffer.data(), p1.second.buffer.size() * sizeof(typename decltype(p1.second.buffer)::value_type), ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
+                }
+            }
         }
     }
 
