@@ -327,7 +327,6 @@ class communication_object
         Iterator first, Iterator last)
     {
         std::cerr << "using exchange_u overload\n";
-        std::terminate();
         // call special function for a single range
         return exchange_u(first, last);
     }
@@ -360,9 +359,12 @@ class communication_object
     template<typename... Iterators>
     [[nodiscard]] handle_type exchange(std::pair<Iterators, Iterators>... iter_pairs)
     {
+        std::cerr << "using private exchange with iterators overload\n";
+
         exchange_impl(iter_pairs...);
-        post_recvs();
-        pack();
+        nccl_exchange_impl();
+        // post_recvs();
+        // pack();
         return {this};
     }
 
@@ -386,6 +388,7 @@ class communication_object
 #endif
     exchange_u(Iterator first, Iterator last)
     {
+        std::cerr << "using private exchange_u with iterators overload\n";
         // call exchange with a pair of iterators
         return exchange(std::make_pair(first, last));
     }
