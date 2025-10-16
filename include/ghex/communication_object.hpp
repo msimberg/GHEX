@@ -575,7 +575,7 @@ class communication_object
                                 m_comm, p1.second.size, device_id);
                         std::cerr << "post_recvs_nccl: triggering ncclRecv\n";
                         std::cerr << "post_recvs_nccl: ptr is " << static_cast<void*>(p1.second.buffer.device_data()) << "\n";
-                        GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.device_data(), p1.second.buffer.size() * sizeof(typename decltype(p1.second.buffer)::value_type), ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
+                        GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.device_data(), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
                         std::cerr << "post_recvs_nccl: triggered ncclRecv\n";
                         device::guard g(p1.second.buffer);
                         std::cerr << "post_recvs_nccl: triggering unpack\n";
