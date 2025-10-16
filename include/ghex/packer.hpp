@@ -387,6 +387,7 @@ struct packer<gpu>
         static std::vector<device::cuda_event> events(num_events);
         static std::size_t event_index{0};
 
+        std::cerr << "pack2_nccl: making messages\n";
         for (auto& p0 : map.send_memory)
         {
             const auto device_id = p0.first;
@@ -431,6 +432,7 @@ struct packer<gpu>
 #if 0
                         if (count == 0) {
 #endif
+                                std::cerr << "pack2_nccl: calling pack call_back\n";
 				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
 #if 0
                         } else {
@@ -453,7 +455,9 @@ struct packer<gpu>
                     }
 
                     // Warning: tag is not used. Messages have to be correctly ordered.
+                    std::cerr << "pack2_nccl: triggering ncclSend\n";
                     GHEX_CHECK_NCCL_RESULT(ncclSend(p1.second.buffer.data(), p1.second.buffer.size() * sizeof(typename decltype(p1.second.buffer)::value_type), ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
+                    std::cerr << "pack2_nccl: triggered ncclSend\n";
                 }
             }
         }
