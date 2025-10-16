@@ -260,9 +260,11 @@ class communication_object
       std::ostringstream msg_init_done;
       msg_init_done << "nccl communicator init done on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_init_done.str();
+      GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
     }
     ~communication_object() noexcept {
       // TODO: nothrow
+      GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaDeviceSynchronize());
       GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
     }
     communication_object(const communication_object&) = delete;
@@ -273,6 +275,7 @@ class communication_object
   private:
     template<typename... Archs, typename... Fields>
     void nccl_exchange_impl(buffer_info_type<Archs, Fields>... buffer_infos) {
+      GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
       // std::cerr << "starting group\n";
       // ncclGroupStart();
       // pack
@@ -291,6 +294,7 @@ class communication_object
       std::cerr << "recvs done\n";
       // ncclGroupEnd();
       // std::cerr << "ending group\n";
+      GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
     }
 
 
