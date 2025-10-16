@@ -299,8 +299,8 @@ class communication_object
     template<typename... Archs, typename... Fields>
     [[nodiscard]] handle_type exchange(buffer_info_type<Archs, Fields>... buffer_infos)
     {
-        nccl_exchange_impl(buffer_infos...);
-        // exchange_impl(buffer_infos...);
+        exchange_impl(buffer_infos...);
+        nccl_exchange_impl();
         // // TODO: Assymetry here.
         // //
         // // post_recvs iterates through memory and fields here in the
@@ -556,11 +556,9 @@ class communication_object
                         )
                             p1.second.buffer = arch_traits<arch_type>::make_message(
                                 m_comm, p1.second.size, device_id);
-                        auto ptr = &p1.second;
-                        // TODO
                         GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.data(), p1.second.buffer.size() * sizeof(typename decltype(p1.second.buffer)::value_type), ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
-                        device::guard g(m);
-                        packer<arch_type>::unpack(*ptr, g.data());
+                        device::guard g(p1.second.buffer);
+                        packer<arch_type>::unpack(p1.second, g.data());
 
                         // use callbacks for unpacking
                         // m_recv_reqs.push_back(m_comm.recv(p1.second.buffer, p1.second.rank,

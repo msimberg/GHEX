@@ -375,7 +375,7 @@ struct packer<gpu>
     }
 
     template<typename Map, typename Requests, typename Communicator, typename NCCLCommunicator>
-    static void pack2_nccl(Map& map, Requests& send_reqs, Communicator& comm, NCCLCommunicator& nccl_comm)
+    static void pack2_nccl(Map& map, Requests&, Communicator& comm, NCCLCommunicator& nccl_comm)
     {
 #if 0
         constexpr std::size_t num_extra_streams{32};
