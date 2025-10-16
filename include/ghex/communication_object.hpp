@@ -300,7 +300,6 @@ class communication_object
     [[nodiscard]] handle_type exchange(buffer_info_type<Archs, Fields>... buffer_infos)
     {
         std::cerr << "using first exchange overload\n";
-        std::terminate();
         exchange_impl(buffer_infos...);
         nccl_exchange_impl();
         // // TODO: Assymetry here.
@@ -346,7 +345,6 @@ class communication_object
         Iterator0 first0, Iterator0 last0, Iterator1 first1, Iterator1 last1, Iterators... iters)
     {
         std::cerr << "using exchange with iterators overload\n";
-        std::terminate();
         static_assert(
             sizeof...(Iterators) % 2 == 0, "need even number of iterators: (begin,end) pairs");
         // call helper function to turn iterators into pairs of iterators
@@ -441,7 +439,6 @@ class communication_object
     void exchange_impl(std::pair<Iterators, Iterators>... iter_pairs)
     {
         std::cerr << "using first exchange_impl overload\n";
-        std::terminate();
         const std::tuple<std::pair<Iterators, Iterators>...> iter_pairs_t{iter_pairs...};
 
         if (m_valid) throw std::runtime_error("earlier exchange operation was not finished");
@@ -480,7 +477,6 @@ class communication_object
     void exchange_impl(buffer_info_type<Archs, Fields>... buffer_infos)
     {
         std::cerr << "using second exchange_impl overload\n";
-        std::terminate();
         // check that arguments are compatible
         using test_t = pattern_container<grid_type, domain_id_type>;
         static_assert(
