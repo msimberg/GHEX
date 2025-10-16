@@ -387,7 +387,12 @@ struct packer<gpu>
         static std::vector<device::cuda_event> events(num_events);
         static std::size_t event_index{0};
 
-        std::cerr << "pack2_nccl: making messages\n";
+        // Assume that send memory synchronizes with the default
+        // stream so schedule pack kernels after an event on the
+        // default stream.
+        cudaEvent_t& e = events[event_index].get();
+        event_index = (event_index + 1) % num_events;
+        GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, 0));
         for (auto& p0 : map.send_memory)
         {
             const auto device_id = p0.first;
@@ -397,24 +402,12 @@ struct packer<gpu>
                 {
                     if (!p1.second.buffer || p1.second.buffer.size() != p1.second.size ||
                         p1.second.buffer.device_id() != device_id)
+                    {
+                        std::cerr << "pack2_nccl: making message\n";
                         p1.second.buffer =
                             arch_traits<gpu>::make_message(comm, p1.second.size, device_id);
-                }
-            }
-        }
+                    }
 
-        // Assume that send memory synchronizes with the default
-        // stream so schedule pack kernels after an event on the
-        // default stream.
-        cudaEvent_t& e = events[event_index].get();
-        event_index = (event_index + 1) % num_events;
-        GHEX_CHECK_CUDA_RESULT(cudaEventRecord(e, 0));
-        for (auto& p0 : map.send_memory)
-        {
-            for (auto& p1 : p0.second)
-            {
-                if (p1.second.size > 0u)
-                {
                     device::guard g(p1.second.buffer);
 #if 0
                     int count = 0;
@@ -455,9 +448,13 @@ struct packer<gpu>
                     }
 
                     // Warning: tag is not used. Messages have to be correctly ordered.
+                    // This is just for debugging, don't do mpi and nccl send
+                    std::cerr << "pack2_nccl: triggering mpi_isend\n";
+                    comm.send(p1.second.buffer, p1.second.rank, p1.second.tag);
                     std::cerr << "pack2_nccl: triggering ncclSend\n";
                     std::cerr << "pack2_nccl: ptr is " << static_cast<void*>(p1.second.buffer.device_data()) << "\n";
                     std::cerr << "pack2_nccl: g.data() is " << static_cast<void*>(g.data()) << "\n";
+                    std::cerr << "pack2_nccl: size is " << p1.second.buffer.size() << "\n";
                     std::cerr << "pack2_nccl: ptr on device " << p1.second.buffer.on_device() << "\n";
                     GHEX_CHECK_NCCL_RESULT(ncclSend(g.data(), p1.second.buffer.size() * sizeof(typename decltype(p1.second.buffer)::value_type), ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
                     std::cerr << "pack2_nccl: triggered ncclSend\n";
