@@ -456,7 +456,7 @@ struct packer<gpu>
                     std::cerr << "pack2_nccl: g.data() is " << static_cast<void*>(g.data()) << "\n";
                     std::cerr << "pack2_nccl: size is " << p1.second.buffer.size() << "\n";
                     std::cerr << "pack2_nccl: ptr on device " << p1.second.buffer.on_device() << "\n";
-                    GHEX_CHECK_NCCL_RESULT(ncclSend(g.data(), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
+                    GHEX_CHECK_NCCL_RESULT(ncclSend(static_cast<const void*>(g.data()), 4 /* p1.second.buffer.size() */ /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
                     std::cerr << "pack2_nccl: triggered ncclSend\n";
                 }
             }
