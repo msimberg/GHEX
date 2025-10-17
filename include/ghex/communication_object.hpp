@@ -265,10 +265,15 @@ class communication_object
     ~communication_object() noexcept {
       // TODO: nothrow
       std::ostringstream msg_destroy;
-      msg_destroy << "~communication_object destroying nccl communicator\n";
+      msg_destroy << "~communication_object destroying nccl communicator";
+      if (m_valid) {
+        msg_destroy << ", comm is valid\n";
+        GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaDeviceSynchronize());
+        GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
+      } else {
+        msg_destroy << ", comm is invalid, skipping ncclCommDestroy\n";
+      }
       std::cerr << msg_destroy.str();
-      GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaDeviceSynchronize());
-      // GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
     }
     communication_object(const communication_object&) = delete;
     communication_object(communication_object&&) = default;
