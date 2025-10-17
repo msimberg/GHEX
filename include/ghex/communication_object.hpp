@@ -286,16 +286,18 @@ class communication_object
     template<typename... Archs, typename... Fields>
     void nccl_exchange_impl(buffer_info_type<Archs, Fields>... buffer_infos) {
       // GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
-      // std::cerr << "starting group\n";
-      ncclGroupStart();
       // pack
       // send
       // std::cerr << "starting packing\n";
       for_each(m_mem, [this](std::size_t, auto& m) {
           using arch_type = typename std::remove_reference_t<decltype(m)>::arch_type;
-          packer<arch_type>::pack2_nccl(m, m_send_reqs, m_comm, m_nccl_comm);
+          packer<arch_type>::pack2_nccl(m, m_send_reqs, m_comm);
       });
       // std::cerr << "packing done\n";
+
+      // std::cerr << "starting group\n";
+      ncclGroupStart();
+      post_sends_nccl();
 
       // recv
       // unpack
@@ -563,6 +565,24 @@ class communication_object
                                 device::guard g(m);
                                 packer<arch_type>::unpack(*ptr, g.data());
                             }));
+                    }
+                }
+            }
+        });
+    }
+
+    void post_sends_nccl()
+    {
+        for_each(m_mem, [this](std::size_t, auto& map) {
+            for (auto& p0 : map.send_memory)
+            {
+                const auto device_id = p0.first;
+                for (auto& p1 : p0.second)
+                {
+                    if (p1.second.size > 0u)
+                    {
+                        device::guard g(p1.second.buffer);
+                        GHEX_CHECK_NCCL_RESULT(ncclSend(static_cast<const void*>(g.data()), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
                     }
                 }
             }

@@ -71,8 +71,8 @@ struct packer
         pack(map, send_reqs, comm);
     }
 
-    template<typename Map, typename Requests, typename Communicator, typename NCCLCommunicator>
-    static void pack2_nccl(Map&, Requests&, Communicator&, NCCLCommunicator&) {}
+    template<typename Map, typename Requests, typename Communicator>
+    static void pack2_nccl(Map&, Requests&, Communicator&) {}
 
     template<typename Buffer>
     static void unpack(Buffer& buffer, unsigned char* data)
@@ -374,8 +374,8 @@ struct packer<gpu>
         }
     }
 
-    template<typename Map, typename Requests, typename Communicator, typename NCCLCommunicator>
-    static void pack2_nccl(Map& map, Requests&, Communicator& comm, NCCLCommunicator& nccl_comm)
+    template<typename Map, typename Requests, typename Communicator>
+    static void pack2_nccl(Map& map, Requests&, Communicator& comm)
     {
 #if 0
         constexpr std::size_t num_extra_streams{32};
@@ -456,7 +456,7 @@ struct packer<gpu>
                     // std::cerr << "pack2_nccl: g.data() is " << static_cast<void*>(g.data()) << "\n";
                     // std::cerr << "pack2_nccl: size is " << p1.second.buffer.size() << "\n";
                     // std::cerr << "pack2_nccl: ptr on device " << p1.second.buffer.on_device() << "\n";
-                    GHEX_CHECK_NCCL_RESULT(ncclSend(static_cast<const void*>(g.data()), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
+                    // GHEX_CHECK_NCCL_RESULT(ncclSend(static_cast<const void*>(g.data()), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
                     // std::cerr << "pack2_nccl: triggered ncclSend\n";
                 }
             }
