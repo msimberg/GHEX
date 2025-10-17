@@ -304,6 +304,7 @@ class communication_object
       // std::cerr << "recvs done\n";
       ncclGroupEnd();
       // std::cerr << "ending group\n";
+      unpack_nccl();
       // GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
     }
 
@@ -590,6 +591,48 @@ class communication_object
                         // std::cerr << "post_recvs_nccl: triggering ncclRecv\n";
                         // std::cerr << "post_recvs_nccl: ptr is " << static_cast<void*>(p1.second.buffer.device_data()) << "\n";
                         GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.device_data(), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
+                        // std::cerr << "post_recvs_nccl: triggered ncclRecv\n";
+                        device::guard g(p1.second.buffer);
+                        // std::cerr << "post_recvs_nccl: triggering unpack\n";
+                        // TODO: This doesn't seem to happen after the recv, schedule outside ncclCommGroup?
+                        // packer<arch_type>::unpack(p1.second, g.data());
+                        // std::cerr << "post_recvs_nccl: triggered unpack\n";
+
+                        // use callbacks for unpacking
+                        // m_recv_reqs.push_back(m_comm.recv(p1.second.buffer, p1.second.rank,
+                        //     p1.second.tag,
+                        //     [ptr](context::message_type& m, context::rank_type, context::tag_type) {
+                        //         device::guard g(m);
+                        //         packer<arch_type>::unpack(*ptr, g.data());
+                        //     }));
+                    }
+                }
+            }
+        });
+    }
+
+    void unpack_nccl()
+    {
+        for_each(m_mem, [this](std::size_t, auto& m) {
+            using arch_type = typename std::remove_reference_t<decltype(m)>::arch_type;
+            for (auto& p0 : m.recv_memory)
+            {
+                const auto device_id = p0.first;
+                for (auto& p1 : p0.second)
+                {
+                    if (p1.second.size > 0u)
+                    {
+                        if (!p1.second.buffer || p1.second.buffer.size() != p1.second.size
+#if defined(GHEX_USE_GPU) || defined(GHEX_GPU_MODE_EMULATE)
+                            || p1.second.buffer.device_id() != device_id
+#endif
+                        )
+                        // std::cerr << "post_recvs_nccl: making message\n";
+                        p1.second.buffer = arch_traits<arch_type>::make_message(
+                            m_comm, p1.second.size, device_id);
+                        // std::cerr << "post_recvs_nccl: triggering ncclRecv\n";
+                        // std::cerr << "post_recvs_nccl: ptr is " << static_cast<void*>(p1.second.buffer.device_data()) << "\n";
+                        // GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.device_data(), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
                         // std::cerr << "post_recvs_nccl: triggered ncclRecv\n";
                         device::guard g(p1.second.buffer);
                         // std::cerr << "post_recvs_nccl: triggering unpack\n";
