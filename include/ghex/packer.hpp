@@ -403,7 +403,7 @@ struct packer<gpu>
                     if (!p1.second.buffer || p1.second.buffer.size() != p1.second.size ||
                         p1.second.buffer.device_id() != device_id)
                     {
-                        std::cerr << "pack2_nccl: making message\n";
+                        // std::cerr << "pack2_nccl: making message\n";
                         p1.second.buffer =
                             arch_traits<gpu>::make_message(comm, p1.second.size, device_id);
                     }
@@ -425,7 +425,7 @@ struct packer<gpu>
 #if 0
                         if (count == 0) {
 #endif
-                                std::cerr << "pack2_nccl: calling pack call_back\n";
+                                // std::cerr << "pack2_nccl: calling pack call_back\n";
 				fb.call_back(g.data() + fb.offset, *fb.index_container, (void*)(&p1.second.m_stream.get()));
 #if 0
                         } else {
@@ -451,13 +451,13 @@ struct packer<gpu>
                     // This is just for debugging, don't do mpi and nccl send
                     // std::cerr << "pack2_nccl: triggering mpi_isend\n";
                     // comm.send(p1.second.buffer, p1.second.rank, p1.second.tag);
-                    std::cerr << "pack2_nccl: triggering ncclSend\n";
-                    std::cerr << "pack2_nccl: ptr is " << static_cast<void*>(p1.second.buffer.device_data()) << "\n";
-                    std::cerr << "pack2_nccl: g.data() is " << static_cast<void*>(g.data()) << "\n";
-                    std::cerr << "pack2_nccl: size is " << p1.second.buffer.size() << "\n";
-                    std::cerr << "pack2_nccl: ptr on device " << p1.second.buffer.on_device() << "\n";
+                    // std::cerr << "pack2_nccl: triggering ncclSend\n";
+                    // std::cerr << "pack2_nccl: ptr is " << static_cast<void*>(p1.second.buffer.device_data()) << "\n";
+                    // std::cerr << "pack2_nccl: g.data() is " << static_cast<void*>(g.data()) << "\n";
+                    // std::cerr << "pack2_nccl: size is " << p1.second.buffer.size() << "\n";
+                    // std::cerr << "pack2_nccl: ptr on device " << p1.second.buffer.on_device() << "\n";
                     GHEX_CHECK_NCCL_RESULT(ncclSend(static_cast<const void*>(g.data()), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, nccl_comm, p1.second.m_stream.get()));
-                    std::cerr << "pack2_nccl: triggered ncclSend\n";
+                    // std::cerr << "pack2_nccl: triggered ncclSend\n";
                 }
             }
         }
