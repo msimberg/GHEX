@@ -12,6 +12,7 @@
 #include <ghex/config.hpp>
 #include <ghex/context.hpp>
 #include <ghex/util/for_each.hpp>
+#include <ghex/util/moved_bit.hpp>
 #include <ghex/util/test_eq.hpp>
 #include <ghex/pattern_container.hpp>
 #include <ghex/device/stream.hpp>
@@ -210,6 +211,7 @@ class communication_object
     using disable_if_buffer_info = std::enable_if_t<!is_buffer_info<T>::value, R>;
 
   private: // members
+    ghex::util::moved_bit          m_moved;
     bool                           m_valid;
     communicator_type              m_comm;
     memory_type                    m_mem;
@@ -260,18 +262,18 @@ class communication_object
       std::ostringstream msg_init_done;
       msg_init_done << "nccl communicator init done on rank " << m_comm.rank() << "/" << m_comm.size() << '\n';
       std::cerr << msg_init_done.str();
-      GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
+      // GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
     }
     ~communication_object() noexcept {
       // TODO: nothrow
       std::ostringstream msg_destroy;
       msg_destroy << "~communication_object destroying nccl communicator";
-      if (m_valid) {
+      if (m_moved) {
         msg_destroy << ", comm is valid\n";
-        GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaDeviceSynchronize());
+        // GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaDeviceSynchronize());
         GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
       } else {
-        msg_destroy << ", comm is invalid, skipping ncclCommDestroy\n";
+        msg_destroy << ", comm is moved, skipping ncclCommDestroy\n";
       }
       std::cerr << msg_destroy.str();
     }
@@ -283,9 +285,9 @@ class communication_object
   private:
     template<typename... Archs, typename... Fields>
     void nccl_exchange_impl(buffer_info_type<Archs, Fields>... buffer_infos) {
-      GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
+      // GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
       // std::cerr << "starting group\n";
-      // ncclGroupStart();
+      ncclGroupStart();
       // pack
       // send
       std::cerr << "starting packing\n";
@@ -300,9 +302,9 @@ class communication_object
       std::cerr << "starting recvs\n";
       post_recvs_nccl();
       std::cerr << "recvs done\n";
-      // ncclGroupEnd();
+      ncclGroupEnd();
       // std::cerr << "ending group\n";
-      GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
+      // GHEX_CHECK_CUDA_RESULT(cudaDeviceSynchronize());
     }
 
 
@@ -587,7 +589,7 @@ class communication_object
                                 m_comm, p1.second.size, device_id);
                         std::cerr << "post_recvs_nccl: triggering ncclRecv\n";
                         std::cerr << "post_recvs_nccl: ptr is " << static_cast<void*>(p1.second.buffer.device_data()) << "\n";
-                        GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.device_data(), 4 /* p1.second.buffer.size() */ /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
+                        GHEX_CHECK_NCCL_RESULT(ncclRecv(p1.second.buffer.device_data(), p1.second.buffer.size() /* * sizeof(typename decltype(p1.second.buffer)::value_type) */, ncclChar, p1.second.rank, m_nccl_comm, p1.second.m_stream.get()));
                         std::cerr << "post_recvs_nccl: triggered ncclRecv\n";
                         device::guard g(p1.second.buffer);
                         std::cerr << "post_recvs_nccl: triggering unpack\n";
