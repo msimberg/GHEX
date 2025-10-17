@@ -271,7 +271,7 @@ class communication_object
       if (m_moved) {
         msg_destroy << ", comm is valid\n";
         // GHEX_CHECK_CUDA_RESULT_NO_THROW(cudaDeviceSynchronize());
-        GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
+        // GHEX_CHECK_NCCL_RESULT_NO_THROW(ncclCommDestroy(m_nccl_comm));
       } else {
         msg_destroy << ", comm is moved, skipping ncclCommDestroy\n";
       }
